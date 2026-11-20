@@ -10,6 +10,7 @@ import (
 
 	"github.com/MiguelFPP/tui-port/internal/tui/keymap"
 	"github.com/MiguelFPP/tui-port/internal/tui/styles"
+	"github.com/MiguelFPP/tui-port/internal/tui/textsafe"
 )
 
 // resize recomputes the canvas and the panel rectangles; the root owns hit-testing.
@@ -306,7 +307,8 @@ func (m Model) configLines(width int) []string {
 		lines = append(lines, "sin overrides")
 	} else {
 		for _, action := range actions {
-			lines = append(lines, "  "+action+": "+strings.Join(m.cfg.Keys[action], " / "))
+			keys := textsafe.Sanitize(strings.Join(m.cfg.Keys[action], " / "))
+			lines = append(lines, "  "+textsafe.Sanitize(action)+": "+keys)
 		}
 	}
 
@@ -342,7 +344,7 @@ func (m Model) configFileLabel() string {
 		return "sin archivo (defaults)"
 	}
 
-	return m.cfg.ConfigPath
+	return textsafe.Sanitize(m.cfg.ConfigPath)
 }
 
 // overrideActions returns the actions with at least one override key, sorted.

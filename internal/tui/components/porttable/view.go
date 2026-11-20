@@ -10,6 +10,7 @@ import (
 	"github.com/MiguelFPP/tui-port/internal/domain"
 	"github.com/MiguelFPP/tui-port/internal/tui/keymap"
 	"github.com/MiguelFPP/tui-port/internal/tui/styles"
+	"github.com/MiguelFPP/tui-port/internal/tui/textsafe"
 )
 
 // View composes the title, the column header, the filter line when it is
@@ -147,7 +148,7 @@ func (m Model) bodyRows() []string {
 // otherwise; it is the line that cuts one row from the body.
 func (m Model) filterLine() string {
 	if !m.editing {
-		return styles.Meta.Render(m.cell("filtro: " + m.filter))
+		return styles.Meta.Render(m.cell("filtro: " + textsafe.Sanitize(m.filter)))
 	}
 
 	line := m.input.View()

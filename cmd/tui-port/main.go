@@ -16,12 +16,13 @@ import (
 	"github.com/MiguelFPP/tui-port/internal/tui/app"
 	"github.com/MiguelFPP/tui-port/internal/tui/keymap"
 	"github.com/MiguelFPP/tui-port/internal/tui/styles"
+	"github.com/MiguelFPP/tui-port/internal/tui/textsafe"
 )
 
 // version and commit are overridden at build time with
 // -ldflags "-X main.version=... -X main.commit=...".
 var (
-	version = "0.1.0"
+	version = "0.1.1"
 	commit  = "dev"
 )
 
@@ -32,7 +33,7 @@ func main() {
 			return
 		}
 
-		fmt.Fprintf(os.Stderr, "tui-port: %v\n", err)
+		fmt.Fprintf(os.Stderr, "tui-port: %s\n", textsafe.Sanitize(err.Error()))
 		os.Exit(1)
 	}
 }

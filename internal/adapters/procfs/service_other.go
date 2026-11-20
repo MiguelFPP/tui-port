@@ -28,7 +28,7 @@ func (s *Service) Snapshot(ctx context.Context) (domain.Snapshot, error) {
 }
 
 // Kill reports that the platform has no proc mount.
-func (s *Service) Kill(ctx context.Context, pid int, signal domain.Signal) error {
+func (s *Service) Kill(ctx context.Context, target domain.ProcessRef, signal domain.Signal) error {
 	return unsupported()
 }
 

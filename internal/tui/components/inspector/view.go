@@ -5,13 +5,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"charm.land/lipgloss/v2"
 
 	"github.com/MiguelFPP/tui-port/internal/domain"
 	"github.com/MiguelFPP/tui-port/internal/tui/keymap"
 	"github.com/MiguelFPP/tui-port/internal/tui/styles"
+	"github.com/MiguelFPP/tui-port/internal/tui/textsafe"
 )
 
 const (
@@ -192,12 +192,14 @@ func (m Model) portLines(siblings []domain.Socket, width int) []string {
 }
 
 // processLabel names the process and appends its pid when the name is known.
+// The name is chosen by the process itself, so it is neutralized first.
 func processLabel(process domain.Process) string {
-	if process.Name == "" {
+	name := strings.TrimSpace(textsafe.Sanitize(process.Name))
+	if name == "" {
 		return "pid " + strconv.Itoa(process.PID)
 	}
 
-	return process.Name + " (pid " + strconv.Itoa(process.PID) + ")"
+	return name + " (pid " + strconv.Itoa(process.PID) + ")"
 }
 
 // endpointLabel renders an endpoint, or a dash when the kernel reported none.
@@ -218,9 +220,11 @@ func remoteLabel(socket domain.Socket) string {
 	return socket.Remote.String()
 }
 
-// valueOrDash keeps a row readable when the snapshot could not resolve the field.
+// valueOrDash keeps a row readable when the snapshot could not resolve the
+// field; the value is neutralized because it also comes from the process.
 func valueOrDash(value string) string {
-	if strings.TrimSpace(value) == "" {
+	value = strings.TrimSpace(textsafe.Sanitize(value))
+	if value == "" {
 		return "-"
 	}
 
@@ -279,27 +283,9 @@ func uptimeLabel(started, now time.Time) string {
 }
 
 // sanitizeCmdline keeps the command line printable: tabs become four spaces and
-// every control rune becomes a space.
+// every control or format rune becomes a space.
 func sanitizeCmdline(cmdline string) string {
-	if cmdline == "" {
-		return ""
-	}
-
-	var b strings.Builder
-	b.Grow(len(cmdline))
-
-	for _, r := range cmdline {
-		switch {
-		case r == '\t':
-			b.WriteString("    ")
-		case unicode.IsControl(r):
-			b.WriteByte(' ')
-		default:
-			b.WriteRune(r)
-		}
-	}
-
-	return strings.TrimSpace(b.String())
+	return strings.TrimSpace(textsafe.Sanitize(cmdline))
 }
 
 // cmdlineLines wraps the command line under its label, keeps every row within

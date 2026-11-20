@@ -20,6 +20,7 @@ import (
 	"github.com/MiguelFPP/tui-port/internal/domain"
 	"github.com/MiguelFPP/tui-port/internal/ports"
 	"github.com/MiguelFPP/tui-port/internal/tui/keymap"
+	"github.com/MiguelFPP/tui-port/internal/tui/textsafe"
 )
 
 const (
@@ -66,8 +67,9 @@ const (
 	filterCharLimit   = 64
 
 	// The notices of an action that never reached the monitor.
-	noticeNoProcess = "sin proceso identificable"
-	noticeProtected = "proceso protegido"
+	noticeNoProcess  = "sin proceso identificable"
+	noticeProtected  = "proceso protegido"
+	noticeUnverified = "identidad del proceso no verificada"
 
 	// maxErrorCells bounds the line the panel shows for a failure it does not recognise.
 	maxErrorCells = 160
@@ -146,15 +148,23 @@ func (r row) attributed() bool {
 }
 
 // name is the process label of the row, unknown when nobody owns the socket.
+// The kernel lets a process choose its own name, so it is neutralized before
+// it can reach the terminal.
 func (r row) name() string {
 	if !r.socket.Attributed() {
 		return "?"
 	}
-	if r.process.Name != "" {
-		return r.process.Name
+	if name := strings.TrimSpace(textsafe.Sanitize(r.process.Name)); name != "" {
+		return name
 	}
 
 	return "pid " + strconv.Itoa(r.socket.PID)
+}
+
+// killable reports whether the row carries the kernel start time that binds
+// the displayed PID to one process instance.
+func (r row) killable() bool {
+	return r.attributed() && r.process.StartTicks != 0
 }
 
 // rss is the resident memory of the owner in human units.
@@ -735,6 +745,8 @@ func describeError(err error) string {
 		return "argumento inválido"
 	case errors.Is(err, domain.ErrProcessProtected):
 		return "proceso protegido"
+	case errors.Is(err, domain.ErrProcessChanged):
+		return "el proceso cambió; refresca la tabla"
 	case errors.Is(err, domain.ErrTooLarge):
 		return "demasiados elementos"
 	case errors.Is(err, context.DeadlineExceeded):
@@ -746,23 +758,11 @@ func describeError(err error) string {
 	}
 }
 
-// summarize reduces an unknown failure to one line without control characters.
+// summarize reduces an unknown failure to one line without terminal sequences.
 func summarize(err error) string {
 	line, _, _ := strings.Cut(err.Error(), "\n")
 
-	return truncate(strings.TrimSpace(strings.Map(dropControl, line)), maxErrorCells)
-}
-
-// dropControl keeps the printable runes, plus the tab the renderer already converts.
-func dropControl(r rune) rune {
-	if r == '\t' {
-		return r
-	}
-	if r < ' ' || r == 0x7f {
-		return -1
-	}
-
-	return r
+	return truncate(strings.TrimSpace(textsafe.Sanitize(line)), maxErrorCells)
 }
 
 // truncate shortens text to width cells, marking the cut with an ellipsis.

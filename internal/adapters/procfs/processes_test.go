@@ -366,3 +366,59 @@ func TestReadCapped(t *testing.T) {
 		t.Error("readCapped() de un archivo ausente = nil, want un error")
 	}
 }
+
+func FuzzParseStatus(f *testing.F) {
+	f.Add([]byte("Name:\tnginx\nPPid:\t1\nUid:\t1000\t1000\t1000\t1000\nVmRSS:\t  1024 kB\nThreads:\t4\n"))
+	f.Add([]byte(""))
+	f.Add([]byte("Name:\x1b]52;c;SGVsbG8=\x07\n"))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > 1<<16 {
+			return
+		}
+
+		_ = parseStatus(data)
+	})
+}
+
+func FuzzParseCmdline(f *testing.F) {
+	f.Add([]byte("sleep\x000--daemon\x00"))
+	f.Add([]byte(""))
+	f.Add([]byte("\x1b[2J\x00arg\x00"))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > 1<<16 {
+			return
+		}
+
+		_ = parseCmdline(data)
+	})
+}
+
+func FuzzParseStartTime(f *testing.F) {
+	f.Add([]byte("1 (x) S " + strings.Repeat("0 ", 25)))
+	f.Add([]byte(""))
+	f.Add([]byte("1 (odd ) name) S " + strings.Repeat("7 ", 25)))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > 1<<16 {
+			return
+		}
+
+		_, _ = parseStartTime(data)
+	})
+}
+
+func FuzzParseBootTime(f *testing.F) {
+	f.Add([]byte("cpu 1 2 3 4\nbtime 1700000000\n"))
+	f.Add([]byte(""))
+	f.Add([]byte("btime no-es-numero\n"))
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > 1<<16 {
+			return
+		}
+
+		_, _ = parseBootTime(data)
+	})
+}

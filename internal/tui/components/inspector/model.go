@@ -152,8 +152,8 @@ func selectionKey(ok bool, socket domain.Socket, process domain.Process, sibling
 	if ok {
 		fmt.Fprintf(&b, "|%s|%s|%s|%s|%d|%d|%d", socket.ID(), socket.Local.String(), socket.Remote.String(),
 			socket.State.String(), socket.UID, socket.Inode, socket.PID)
-		fmt.Fprintf(&b, "|%d|%d|%q|%q|%q|%d|%d|%d", process.PID, process.PPID, process.Name, process.User,
-			process.Cmdline, process.RSS, process.Threads, process.StartedAt.UnixNano())
+		fmt.Fprintf(&b, "|%d|%d|%q|%q|%q|%d|%d|%d|%d", process.PID, process.PPID, process.Name, process.User,
+			process.Cmdline, process.RSS, process.Threads, process.StartedAt.UnixNano(), process.StartTicks)
 	}
 
 	fmt.Fprintf(&b, "|%d", len(siblings))
