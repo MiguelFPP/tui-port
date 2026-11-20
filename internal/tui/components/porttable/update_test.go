@@ -233,8 +233,8 @@ func TestKillKeySignalsAndNotifies(t *testing.T) {
 	}
 
 	calls := monitor.killCalls()
-	if len(calls) != 1 || calls[0].pid != 100 || calls[0].signal != domain.SignalKill {
-		t.Fatalf("Kill calls = %+v, want SIGKILL to the nginx pid", calls)
+	if len(calls) != 1 || calls[0].target.PID != 100 || calls[0].target.StartTicks != 500 || calls[0].signal != domain.SignalKill {
+		t.Fatalf("Kill calls = %+v, want SIGKILL to the nginx instance", calls)
 	}
 	if next.writing {
 		t.Error("writing = true after the answer")
@@ -464,7 +464,7 @@ func (deadlineMonitor) Snapshot(ctx context.Context) (domain.Snapshot, error) {
 	return sampleSnapshot(), nil
 }
 
-func (deadlineMonitor) Kill(ctx context.Context, _ int, _ domain.Signal) error {
+func (deadlineMonitor) Kill(ctx context.Context, _ domain.ProcessRef, _ domain.Signal) error {
 	if _, ok := ctx.Deadline(); !ok {
 		return errors.New("no deadline")
 	}

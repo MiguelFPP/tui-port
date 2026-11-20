@@ -87,7 +87,7 @@ function Resolve-Version {
         $candidate = $latest.tag_name.Trim().TrimStart('v')
     }
 
-    if ($candidate -notmatch '^[0-9]+(\.[0-9]+)*$') {
+    if ($candidate -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
         throw "versión inválida: $candidate (se espera vX.Y.Z)"
     }
 
@@ -204,9 +204,8 @@ try {
         $extracted = Join-Path $work 'extract'
         Expand-Archive -Path $archive -DestinationPath $extracted -Force
 
-        $exe = Get-ChildItem -Path $extracted -Filter "$Binary.exe" -Recurse |
-            Select-Object -First 1
-        if (-not $exe) {
+        $exe = Join-Path $extracted "$Binary.exe"
+        if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
             throw "no se encontró $Binary.exe en el archivo"
         }
 

@@ -205,6 +205,9 @@ func TestSnapshotReadsFixture(t *testing.T) {
 	if want := time.Unix(btimeSeconds+5, 0).UTC(); !owner.StartedAt.Equal(want) {
 		t.Errorf("StartedAt = %v, want %v", owner.StartedAt, want)
 	}
+	if owner.StartTicks != 500 {
+		t.Errorf("StartTicks = %d, want 500", owner.StartTicks)
+	}
 
 	listener, ok := snapshot.Process(pidListener)
 	if !ok {
@@ -231,6 +234,9 @@ func TestSnapshotReadsFixture(t *testing.T) {
 	}
 	if !listener.StartedAt.IsZero() {
 		t.Errorf("StartedAt = %v, want el valor cero sin <pid>/stat", listener.StartedAt)
+	}
+	if listener.StartTicks != 0 {
+		t.Errorf("StartTicks = %d, want el valor cero sin <pid>/stat", listener.StartTicks)
 	}
 
 	owned := snapshot.SocketsOf(pidOwner)
@@ -356,12 +362,14 @@ func TestKillRejectsInvalidArguments(t *testing.T) {
 	}
 
 	for _, pid := range []int{0, -1, -4242} {
-		if err := service.Kill(context.Background(), pid, domain.SignalTerm); !errors.Is(err, domain.ErrInvalidArgument) {
+		target := domain.ProcessRef{PID: pid, StartTicks: 1}
+		if err := service.Kill(context.Background(), target, domain.SignalTerm); !errors.Is(err, domain.ErrInvalidArgument) {
 			t.Errorf("Kill(%d) error = %v, want %v", pid, err, domain.ErrInvalidArgument)
 		}
 	}
 
-	if err := service.Kill(context.Background(), 4000000, domain.Signal(9)); !errors.Is(err, domain.ErrInvalidArgument) {
+	target := domain.ProcessRef{PID: 4000000, StartTicks: 1}
+	if err := service.Kill(context.Background(), target, domain.Signal(9)); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Errorf("Kill() con una senal desconocida error = %v, want %v", err, domain.ErrInvalidArgument)
 	}
 }
@@ -373,7 +381,8 @@ func TestKillProtectsCriticalProcesses(t *testing.T) {
 	}
 
 	for _, pid := range []int{1, os.Getpid()} {
-		if err := service.Kill(context.Background(), pid, domain.SignalKill); !errors.Is(err, domain.ErrProcessProtected) {
+		target := domain.ProcessRef{PID: pid, StartTicks: 1}
+		if err := service.Kill(context.Background(), target, domain.SignalKill); !errors.Is(err, domain.ErrProcessProtected) {
 			t.Errorf("Kill(%d) error = %v, want %v", pid, err, domain.ErrProcessProtected)
 		}
 	}
@@ -388,8 +397,59 @@ func TestKillRejectsCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if err := service.Kill(ctx, 4000000, domain.SignalTerm); !errors.Is(err, context.Canceled) {
+	target := domain.ProcessRef{PID: 4000000, StartTicks: 1}
+	if err := service.Kill(ctx, target, domain.SignalTerm); !errors.Is(err, context.Canceled) {
 		t.Errorf("Kill() error = %v, want %v", err, context.Canceled)
+	}
+}
+
+func TestKillVerifiesTheProcessIdentity(t *testing.T) {
+	service, err := New(buildFixture(t))
+	if err != nil {
+		t.Fatalf("New() error = %v, want nil", err)
+	}
+
+	var calls []struct {
+		pid    int
+		signal syscall.Signal
+	}
+	service.kill = func(pid int, signal syscall.Signal) error {
+		calls = append(calls, struct {
+			pid    int
+			signal syscall.Signal
+		}{pid: pid, signal: signal})
+
+		return nil
+	}
+
+	target := domain.ProcessRef{PID: pidOwner, StartTicks: 500}
+	if err := service.Kill(context.Background(), target, domain.SignalKill); err != nil {
+		t.Fatalf("Kill() error = %v, want nil", err)
+	}
+	if len(calls) != 1 || calls[0].pid != pidOwner || calls[0].signal != syscall.SIGKILL {
+		t.Fatalf("signal calls = %+v, want SIGKILL to pid %d", calls, pidOwner)
+	}
+
+	for _, ticks := range []uint64{0, 499} {
+		target := domain.ProcessRef{PID: pidOwner, StartTicks: ticks}
+		if err := service.Kill(context.Background(), target, domain.SignalKill); !errors.Is(err, domain.ErrProcessChanged) {
+			t.Errorf("Kill(start=%d) error = %v, want %v", ticks, err, domain.ErrProcessChanged)
+		}
+	}
+
+	target = domain.ProcessRef{PID: 999999, StartTicks: 1}
+	if err := service.Kill(context.Background(), target, domain.SignalTerm); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("Kill(missing) error = %v, want %v", err, domain.ErrNotFound)
+	}
+
+	if len(calls) != 1 {
+		t.Errorf("signal calls = %+v, want only the verified target", calls)
+	}
+
+	service.kill = func(int, syscall.Signal) error { return syscall.EPERM }
+	target = domain.ProcessRef{PID: pidOwner, StartTicks: 500}
+	if err := service.Kill(context.Background(), target, domain.SignalTerm); !errors.Is(err, domain.ErrPermissionDenied) {
+		t.Errorf("Kill(EPERM) error = %v, want %v", err, domain.ErrPermissionDenied)
 	}
 }
 

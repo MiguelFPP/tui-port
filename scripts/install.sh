@@ -138,7 +138,25 @@ resolve_version() {
 
 	version=${version#v}
 	case "$version" in
-	'' | *[!0-9.]*) die "versión inválida: $version (se espera vX.Y.Z)" ;;
+	'' | *[!0-9.]*)
+		die "versión inválida: $version (se espera vX.Y.Z)"
+		;;
+	*) ;;
+	esac
+	case "$version" in
+	*.*.*) ;;
+	*) die "versión inválida: $version (se espera vX.Y.Z)" ;;
+	esac
+	case "$version" in
+	.*) die "versión inválida: $version (se espera vX.Y.Z)" ;;
+	*) ;;
+	esac
+	case "$version" in
+	*.) die "versión inválida: $version (se espera vX.Y.Z)" ;;
+	*) ;;
+	esac
+	case "$version" in
+	*..*) die "versión inválida: $version (se espera vX.Y.Z)" ;;
 	*) ;;
 	esac
 }

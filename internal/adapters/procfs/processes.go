@@ -33,6 +33,8 @@ const (
 	statStartIndex = 19
 	// clockTicks is CLK_TCK, the rate the kernel counts starttime with.
 	clockTicks = 100
+	// maxStartSeconds keeps the start time inside the range of time.Duration.
+	maxStartSeconds = uint64((1<<63 - 1) / int64(time.Second))
 )
 
 // socketInode decodes the target of a /proc/<pid>/fd entry, "socket:[<inode>]".
@@ -309,13 +311,16 @@ func readProcess(root string, pid int, boot time.Time, users *userCache) domain.
 		process.Cmdline = parseCmdline(data)
 	}
 
-	if boot.IsZero() {
-		return process
-	}
-
 	if data, _, err := readCapped(filepath.Join(dir, "stat"), maxStatBytes); err == nil {
 		if ticks, ok := parseStartTime(data); ok {
-			process.StartedAt = boot.Add(time.Duration(ticks/clockTicks) * time.Second)
+			process.StartTicks = ticks
+			if !boot.IsZero() {
+				seconds := ticks / clockTicks
+				if seconds <= maxStartSeconds {
+					// #nosec G115 -- maxStartSeconds keeps the conversion inside time.Duration.
+					process.StartedAt = boot.Add(time.Duration(seconds) * time.Second)
+				}
+			}
 		}
 	}
 
@@ -395,6 +400,7 @@ func readCapped(path string, limit int) ([]byte, bool, error) {
 		return nil, false, nil
 	}
 
+	// #nosec G304 -- path is built under the validated proc mount root, never from user input.
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, false, err

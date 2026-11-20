@@ -253,34 +253,41 @@ func (m *Model) moveCursor(delta int) {
 }
 
 // startAction signals the process of the selected socket; a socket without an
-// owner and the processes the monitor must never touch are refused here.
+// owner, a process without a verified kernel start time and the processes the
+// monitor must never touch are refused here.
 func (m *Model) startAction(signal domain.Signal) tea.Cmd {
 	if m.writing || !m.hasSelection {
 		return nil
 	}
 
-	socket := m.selected
-	if !socket.Attributed() {
+	item := m.rows[m.cursor]
+	if !item.attributed() {
 		m.notice = noticeNoProcess
 
 		return nil
 	}
 
-	pid := socket.PID
+	pid := item.socket.PID
 	if pid <= 1 || pid == os.Getpid() {
 		m.notice = noticeProtected
 
 		return nil
 	}
+	if !item.killable() {
+		m.notice = noticeUnverified
 
-	name := m.rows[m.cursor].name()
+		return nil
+	}
+
+	target := item.process.Ref()
+	name := item.name()
 
 	m.actionSeq++
 	m.writing = true
 	m.notice = ""
 	m.actionErr = nil
 
-	return actionCmd(m.monitor, m.actionSeq, pid, name, signal)
+	return actionCmd(m.monitor, m.actionSeq, target, name, signal)
 }
 
 // applyAction stores the outcome of one signal: a success leaves a notice and
@@ -366,11 +373,12 @@ func loadSnapshot(monitor ports.MonitorService, seq int) tea.Cmd {
 	}
 }
 
-// actionCmd signals one process under a bounded context.
-func actionCmd(monitor ports.MonitorService, seq, pid int, name string, signal domain.Signal) tea.Cmd {
+// actionCmd signals one process under a bounded context. The target carries the
+// PID and the kernel start time, so the adapter can reject a recycled PID.
+func actionCmd(monitor ports.MonitorService, seq int, target domain.ProcessRef, name string, signal domain.Signal) tea.Cmd {
 	if monitor == nil {
 		return func() tea.Msg {
-			return actionMsg{seq: seq, pid: pid, name: name, signal: signal, err: domain.ErrUnavailable}
+			return actionMsg{seq: seq, pid: target.PID, name: name, signal: signal, err: domain.ErrUnavailable}
 		}
 	}
 
@@ -378,8 +386,8 @@ func actionCmd(monitor ports.MonitorService, seq, pid int, name string, signal d
 		ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
 		defer cancel()
 
-		err := monitor.Kill(ctx, pid, signal)
+		err := monitor.Kill(ctx, target, signal)
 
-		return actionMsg{seq: seq, pid: pid, name: name, signal: signal, err: err}
+		return actionMsg{seq: seq, pid: target.PID, name: name, signal: signal, err: err}
 	}
 }

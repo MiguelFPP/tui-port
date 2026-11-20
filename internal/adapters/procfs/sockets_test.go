@@ -226,3 +226,32 @@ func TestParseNetFileEmpty(t *testing.T) {
 		}
 	}
 }
+
+func FuzzParseNetFile(f *testing.F) {
+	seed := netHeader + netRow("00000000:1F90", "00000000:0000", "0A", 0, 1)
+	f.Add([]byte(seed), false, 64)
+	f.Add([]byte(netHeader+"   fila rota\n"), true, 0)
+	f.Add([]byte(""), false, -1)
+
+	f.Fuzz(func(t *testing.T, data []byte, ipv6 bool, limit int) {
+		if len(data) > 1<<20 {
+			return
+		}
+		if limit < 0 {
+			limit = 0
+		}
+		if limit > 1024 {
+			limit = 1024
+		}
+
+		protocol := domain.ProtocolTCP
+		if ipv6 {
+			protocol = domain.ProtocolTCP6
+		}
+
+		sockets, _ := parseNetFile(data, protocol, limit)
+		if len(sockets) > limit {
+			t.Fatalf("parseNetFile() = %d sockets, limit %d", len(sockets), limit)
+		}
+	})
+}

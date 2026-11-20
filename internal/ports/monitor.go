@@ -12,5 +12,5 @@ import (
 // processes that own them.
 type MonitorService interface {
 	Snapshot(ctx context.Context) (domain.Snapshot, error)
-	Kill(ctx context.Context, pid int, signal domain.Signal) error
+	Kill(ctx context.Context, target domain.ProcessRef, signal domain.Signal) error
 }

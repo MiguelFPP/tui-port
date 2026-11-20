@@ -10,5 +10,6 @@ var (
 	ErrUnavailable      = errors.New("monitor no disponible")
 	ErrUnsupported      = errors.New("sistema no soportado")
 	ErrProcessProtected = errors.New("proceso protegido")
+	ErrProcessChanged   = errors.New("el proceso cambió")
 	ErrTooLarge         = errors.New("demasiados elementos")
 )

@@ -24,7 +24,7 @@ const (
 
 // killCall is one signal the fake monitor received.
 type killCall struct {
-	pid    int
+	target domain.ProcessRef
 	signal domain.Signal
 }
 
@@ -60,7 +60,7 @@ func (f *fakeMonitor) Snapshot(ctx context.Context) (domain.Snapshot, error) {
 	return f.snapshot, f.snapshotErr
 }
 
-func (f *fakeMonitor) Kill(ctx context.Context, pid int, signal domain.Signal) error {
+func (f *fakeMonitor) Kill(ctx context.Context, target domain.ProcessRef, signal domain.Signal) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func (f *fakeMonitor) Kill(ctx context.Context, pid int, signal domain.Signal) e
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	f.kills = append(f.kills, killCall{pid: pid, signal: signal})
+	f.kills = append(f.kills, killCall{target: target, signal: signal})
 
 	return f.killErr
 }
@@ -112,9 +112,9 @@ func sampleSnapshot() domain.Snapshot {
 	return domain.Snapshot{
 		TakenAt: time.Unix(1700000000, 0),
 		Processes: []domain.Process{
-			{PID: 100, Name: "nginx", User: "www-data", RSS: 12 * mib},
-			{PID: 200, Name: "postgres", User: "postgres", RSS: 256 * mib},
-			{PID: 300, Name: "node", User: "dev", RSS: 90 * kib},
+			{PID: 100, Name: "nginx", User: "www-data", RSS: 12 * mib, StartTicks: 500},
+			{PID: 200, Name: "postgres", User: "postgres", RSS: 256 * mib, StartTicks: 600},
+			{PID: 300, Name: "node", User: "dev", RSS: 90 * kib, StartTicks: 700},
 		},
 		Sockets: []domain.Socket{
 			{Protocol: domain.ProtocolTCP, Local: domain.Endpoint{Addr: "0.0.0.0", Port: 80}, State: domain.StateListen, Inode: 11, PID: 100},
@@ -148,7 +148,7 @@ func manySockets(count int) domain.Snapshot {
 	}
 
 	return domain.Snapshot{
-		Processes: []domain.Process{{PID: 100, Name: "nginx", RSS: mib}},
+		Processes: []domain.Process{{PID: 100, Name: "nginx", RSS: mib, StartTicks: 500}},
 		Sockets:   sockets,
 	}
 }

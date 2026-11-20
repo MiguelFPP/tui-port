@@ -49,7 +49,7 @@ func WriteDefault(path string, force bool) error {
 	}
 
 	dir := filepath.Dir(target)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("%w: no se pudo crear %s: %w", ErrConfigFile, dir, err)
 	}
 
@@ -83,7 +83,7 @@ func SaveSplit(path string, width int, collapsed bool) error {
 	}
 
 	dir := filepath.Dir(target)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("%w: no se pudo crear %s: %w", ErrConfigFile, dir, err)
 	}
 
@@ -222,11 +222,13 @@ func loadFile(path string, explicit bool) (fileConfig, bool, error) {
 		return fileConfig{}, false, fmt.Errorf("%w: %s: %w", ErrConfigFile, path, err)
 	case info.IsDir():
 		return fileConfig{}, false, fmt.Errorf("%w: %s es un directorio", ErrConfigFile, path)
+	case !info.Mode().IsRegular():
+		return fileConfig{}, false, fmt.Errorf("%w: %s no es un archivo regular", ErrConfigFile, path)
 	case info.Size() > maxConfigBytes:
 		return fileConfig{}, false, fmt.Errorf("%w: %s supera %d bytes", ErrConfigFile, path, maxConfigBytes)
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return fileConfig{}, false, fmt.Errorf("%w: %s: %w", ErrConfigFile, path, err)
 	}
@@ -237,6 +239,28 @@ func loadFile(path string, explicit bool) (fileConfig, bool, error) {
 	}
 
 	return cfg, true, nil
+}
+
+// readConfigFile opens the config file and reads at most maxConfigBytes. The
+// open file is the authority, so a file that grows after the stat call cannot
+// exhaust memory.
+func readConfigFile(path string) ([]byte, error) {
+	// #nosec G304 -- path is the user's explicit config file, validated as regular above.
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxConfigBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxConfigBytes {
+		return nil, fmt.Errorf("supera %d bytes", maxConfigBytes)
+	}
+
+	return data, nil
 }
 
 // decodeFile rejects unknown fields and trailing data.

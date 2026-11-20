@@ -16,6 +16,7 @@ import (
 	"github.com/MiguelFPP/tui-port/internal/tui/components/porttable"
 	"github.com/MiguelFPP/tui-port/internal/tui/keymap"
 	"github.com/MiguelFPP/tui-port/internal/tui/styles"
+	"github.com/MiguelFPP/tui-port/internal/tui/textsafe"
 )
 
 const (
@@ -610,7 +611,7 @@ func (m *Model) quit() (tea.Cmd, bool) {
 
 // notify shows a toast that does not come from a panel error.
 func (m *Model) notify(text string) tea.Cmd {
-	m.toast = toastPrefix + text
+	m.toast = toastPrefix + textsafe.Sanitize(text)
 	m.toastSeq++
 	seq := m.toastSeq
 
@@ -644,7 +645,7 @@ func (m *Model) syncToast() tea.Cmd {
 		return nil
 	}
 
-	m.toast = toastPrefix + err.Error()
+	m.toast = toastPrefix + textsafe.Sanitize(err.Error())
 	m.toastSeq++
 	seq := m.toastSeq
 

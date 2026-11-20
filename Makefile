@@ -1,9 +1,11 @@
 COMPOSE ?= docker compose
 COMPOSE_RUN = $(COMPOSE) run --rm --no-deps -T
+VULNCHECK ?= v1.10.0
+FUZZTIME ?= 10s
 
 .DEFAULT_GOAL := help
 
-.PHONY: help dev run host build test test-pkg test-run test-race vet vet-pkg bench-pkg fmt tidy clean
+.PHONY: help dev run host build test test-pkg test-run test-race vet vet-pkg bench-pkg fuzz-pkg vuln fmt tidy clean
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-17s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -45,6 +47,14 @@ vet-pkg: ## Run go vet for one package: make vet-pkg PKG='./internal/<pkg>/...'
 bench-pkg: ## Run the benchmarks of one package: make bench-pkg PKG='./internal/<pkg>/...'
 	@test -n "$(PKG)" || { echo "bench-pkg: PKG is required, e.g. make bench-pkg PKG='./internal/adapters/procfs/...'"; exit 1; }
 	$(COMPOSE_RUN) dev go test -run '^$$' -bench . -benchmem $(PKG)
+
+fuzz-pkg: ## Fuzz one target: make fuzz-pkg PKG='...' FUZZ='FuzzName' [FUZZTIME=10s]
+	@test -n "$(PKG)" || { echo "fuzz-pkg: PKG is required, e.g. make fuzz-pkg PKG='./internal/adapters/procfs/...' FUZZ='FuzzParseNetFile'"; exit 1; }
+	@test -n "$(FUZZ)" || { echo "fuzz-pkg: FUZZ is required, e.g. make fuzz-pkg PKG='./internal/adapters/procfs/...' FUZZ='FuzzParseNetFile'"; exit 1; }
+	$(COMPOSE_RUN) dev go test -run '^$$' -fuzz '^$(FUZZ)$$' -fuzztime '$(FUZZTIME)' $(PKG)
+
+vuln: ## Run govulncheck inside the dev container
+	$(COMPOSE_RUN) dev sh -c 'go run golang.org/x/vuln/cmd/govulncheck@$(VULNCHECK) ./...'
 
 fmt: ## Run go fmt inside the dev container
 	$(COMPOSE_RUN) dev go fmt ./...
