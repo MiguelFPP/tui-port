@@ -1,0 +1,10 @@
+{
+  "theme": "catppuccin-mocha",
+  "split_width": 44,
+  "split_collapsed": false,
+  "keys": {
+    "help": ["h"],
+    "ports_sort": ["o"],
+    "ports_kill": ["K"]
+  }
+}

@@ -1,0 +1,51 @@
+name: tui-port
+
+services:
+  dev:
+    build:
+      context: .
+      target: dev
+    image: tui-port:dev
+    init: true
+    stdin_open: true
+    tty: true
+    working_dir: /src
+    environment:
+      TERM: ${TERM:-xterm-256color}
+    volumes:
+      - .:/src
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    command: ["air", "-c", ".air.toml"]
+
+  # Opt-in service that sees the host network and processes: without it the tool
+  # only lists the sockets of the container's own network namespace.
+  host:
+    profiles: ["host"]
+    build:
+      context: .
+      target: runtime
+    image: tui-port:host
+    init: true
+    stdin_open: true
+    tty: true
+    network_mode: host
+    pid: host
+    environment:
+      TERM: ${TERM:-xterm-256color}
+
+  app:
+    profiles: ["prod"]
+    build:
+      context: .
+      target: runtime
+    image: tui-port:latest
+    init: true
+    stdin_open: true
+    tty: true
+    environment:
+      TERM: ${TERM:-xterm-256color}
+
+volumes:
+  go-mod-cache:
+  go-build-cache:
