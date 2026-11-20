@@ -28,15 +28,24 @@ no es una vulnerabilidad por sí mismo.
 Lo que sí es materia de seguridad es todo lo que puede ampliar ese poder o
 saltarse las guardas:
 
-- Que una señal alcance un proceso distinto del dueño del socket seleccionado.
-- Que se pueda enviar una señal sin selección, con un `pid` inventado o a un
-  proceso protegido (`pid <= 0`, `pid 1`, el propio pid).
+- Que una señal alcance un proceso distinto del dueño del socket seleccionado,
+  incluido un PID reciclado entre el snapshot y la pulsación.
+- Que se pueda enviar una señal sin selección, con un `pid` inventado, sin
+  identidad de instancia verificada o a un proceso protegido (`pid <= 0`,
+  `pid 1`, el propio pid).
 - Que una lectura de `/proc` sin límites permita agotar memoria o bloquear la
   interfaz.
+- Que una secuencia de control elegida por un proceso llegue a la terminal a
+  través de su nombre, usuario o línea de comandos.
 
 Las guardas viven en el adaptador (`Service.Kill`) y en la tabla
 (`startAction`): se aplican antes de llegar al kernel, y una negativa del kernel
 (`EPERM`, `ESRCH`) se traduce a un error de dominio que la UI muestra en el pie.
+`Kill` recibe un `domain.ProcessRef` con el `starttime` del kernel y lo vuelve a
+leer de `/proc/<pid>/stat` antes de la señal; si no coincide, devuelve
+`domain.ErrProcessChanged` y no llama al kernel. Además, `internal/tui/textsafe`
+neutraliza controles C0/C1, formato Unicode, bidi y separadores de línea en todo
+texto derivado de `/proc` antes de renderizarlo.
 
 ## El binario no necesita root
 
@@ -86,6 +95,40 @@ descriptores por proceso, bytes de `status`/`stat`/`cmdline` y tamaño de cada
 tabla de red; un montaje hostil o gigante no reserva memoria sin límite. Los
 enlaces de `/proc/<pid>/fd` se resuelven con `Readlink`: se lee el destino, no se
 abre el archivo apuntado, y solo se acepta el formato `socket:[<inode>]`.
+
+El archivo de configuración solo se acepta si es un archivo regular; un FIFO o
+un dispositivo (`/dev/zero`) se rechaza antes de abrirlo. La lectura está
+acotada a 1 MiB y el directorio se crea con permisos `0750`; el archivo se
+escribe de forma atómica con `0600` y el rename no sigue un symlink.
+
+## Pruebas de seguridad
+
+La suite normal, el detector de carreras y el análisis de dependencias se
+ejecutan dentro del contenedor:
+
+```bash
+make test
+make vet
+make test-race
+make vuln
+```
+
+`make vuln` ejecuta `govulncheck` con una versión fijada. Los parsers de
+`/proc`, el decodificador de configuración y el saneador tienen objetivos de
+fuzzing; se ejecutan con:
+
+```bash
+make fuzz-pkg PKG='./internal/adapters/procfs/...' FUZZ='FuzzParseNetFile'
+```
+
+El CI ejecuta `make test`, `make vet` y `make vuln`; las acciones de GitHub
+están fijadas por SHA.
+
+## Historial de avisos
+
+| Fecha | Aviso | Severidad | Versión corregida |
+| :--- | :--- | :--- | :--- |
+| 2026-11-20 | [GHSA-wpjm-93r4-37mr](https://github.com/MiguelFPP/tui-port/security/advisories/GHSA-wpjm-93r4-37mr): inyección de secuencias de control desde metadatos de procesos | Media | 0.1.1 |
 
 ## Actualizaciones de dependencias
 

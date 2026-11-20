@@ -5,10 +5,10 @@ los puertos ocupados, el proceso que los posee, su memoria residente y permite
 terminarlo con una tecla. El estilo es el de `htop`, pero la unidad de trabajo no
 es el proceso sino el socket.
 
-Estado actual: **v0.1.0**. Primera versión con tabla de puertos, detalle del
-socket y del proceso, pestañas, orden y filtro, señales con guardas, temas y
-configuración JSON, adaptador Linux sobre `/proc` y stub para el resto de
-sistemas.
+Estado actual: **v0.1.1**. Release de seguridad: tabla de puertos, detalle del
+socket y del proceso, pestañas, orden y filtro, señales con guardas e identidad
+verificada, saneamiento de la salida, temas y configuración JSON, adaptador
+Linux sobre `/proc` y stub para el resto de sistemas.
 
 ## Por qué
 
@@ -36,8 +36,12 @@ proceso). Desde ahí, `x` o `t` cierran el proceso.
   cmdline ajustada) y la lista completa de puertos del proceso, con el socket
   seleccionado marcado.
 - **Señales con una tecla:** `x` envía `SIGKILL` y `t` envía `SIGTERM`. El
-  monitor rechaza `pid <= 0`, `pid 1` y su propio pid, y la tabla ni siquiera
-  intenta la señal cuando el socket no tiene dueño resuelto.
+  monitor rechaza `pid <= 0`, `pid 1` y su propio pid, exige que el socket tenga
+  un proceso resuelto y vuelve a comprobar el `starttime` del kernel antes de
+  cada señal, así que un PID reciclado no recibe el disparo.
+- **Salida saneada:** los nombres, usuarios, cmdlines, filtros, rutas y errores
+  que vienen de `/proc` o de la configuración se neutralizan antes de
+  renderizarse; una secuencia de control no llega a la terminal.
 - **Teclado y ratón:** clic para seleccionar fila, pestañas y botón del detalle
   clicables, rueda sobre el panel bajo el cursor y arrastre del borde compartido
   para repartir el ancho.
@@ -116,7 +120,8 @@ tui-port/
 │       ├── app/              # modelo raíz, pestañas, layout, foco y ratón
 │       ├── components/       # porttable e inspector
 │       ├── keymap/           # catálogo, parser de teclas y overrides
-│       └── styles/           # catálogo de temas y tokens Lip Gloss
+│       ├── styles/           # catálogo de temas y tokens Lip Gloss
+│       └── textsafe/         # neutraliza controles y formato antes de renderizar
 ├── scripts/                  # install.sh (Linux/macOS) e install.ps1 (Windows)
 ├── .air.toml
 ├── .goreleaser.yaml
@@ -175,7 +180,7 @@ Opciones de `install.sh`:
 ```bash
 # Versión concreta y directorio propio
 curl -fsSL https://raw.githubusercontent.com/MiguelFPP/tui-port/main/scripts/install.sh \
-  | sh -s -- --version v0.1.0 --dir "$HOME/bin"
+  | sh -s -- --version v0.1.1 --dir "$HOME/bin"
 
 # Sin verificar el checksum (no recomendado)
 curl -fsSL https://raw.githubusercontent.com/MiguelFPP/tui-port/main/scripts/install.sh \
@@ -189,7 +194,7 @@ curl -fsSL https://raw.githubusercontent.com/MiguelFPP/tui-port/main/scripts/ins
 | `--no-verify` | Omite la verificación del SHA-256 |
 | `-h`, `--help` | Muestra la ayuda |
 
-Opciones de `install.ps1`: `-Version v0.1.0`, `-Dir C:\Tools\tui-port`,
+Opciones de `install.ps1`: `-Version v0.1.1`, `-Dir C:\Tools\tui-port`,
 `-NoVerify` y `-Help`.
 
 - `install.sh` es POSIX `sh` y necesita `curl` o `wget`, más `tar`. Rechaza
@@ -225,7 +230,7 @@ se descargan desde la página de
 **incluye la versión**:
 
 ```bash
-version=0.1.0
+version=0.1.1
 base="https://github.com/MiguelFPP/tui-port/releases/download/v${version}"
 
 curl -fLO "${base}/tui-port_${version}_linux_amd64.tar.gz"
@@ -249,7 +254,7 @@ Cada archivo publicado incluye además `LICENSE`, `README.md`, `CHANGELOG.md`,
 go install github.com/MiguelFPP/tui-port/cmd/tui-port@latest
 ```
 
-Necesita Go 1.27.4 o superior. El binario resultante informa `tui-port 0.1.0`
+Necesita Go 1.27.4 o superior. El binario resultante informa `tui-port 0.1.1`
 sin commit, porque `go install` no inyecta ldflags.
 
 ### Con la cadena de Docker
@@ -276,12 +281,12 @@ cd tui-port
 go build -trimpath -o tui-port ./cmd/tui-port
 ```
 
-Con `go build` sin ldflags, `--version` informa `tui-port 0.1.0`. Para inyectar
+Con `go build` sin ldflags, `--version` informa `tui-port 0.1.1`. Para inyectar
 la versión y el commit como hace GoReleaser:
 
 ```bash
 go build -trimpath \
-  -ldflags "-s -w -X main.version=0.1.0 -X main.commit=$(git rev-parse --short HEAD)" \
+  -ldflags "-s -w -X main.version=0.1.1 -X main.commit=$(git rev-parse --short HEAD)" \
   -o tui-port ./cmd/tui-port
 ```
 
@@ -307,7 +312,7 @@ o `t` sobre el proceso que se quiera cerrar.
 
 | Flag | Default | Descripción |
 | :--- | :--- | :--- |
-| `--version` | — | Imprime `tui-port 0.1.0` (en releases añade el commit) y sale con código 0 |
+| `--version` | — | Imprime `tui-port 0.1.1` (en releases añade el commit) y sale con código 0 |
 | `--list-themes` | — | Lista los temas y marca el default; no lee el archivo de configuración |
 | `--list-keys` | — | Lista acción, scope, teclas efectivas y si son configurables o fijas (TSV) |
 | `--config FILE` | `$XDG_CONFIG_HOME/tui-port/config.json` | Archivo JSON; si se indica explícitamente debe existir |
@@ -508,7 +513,7 @@ flowchart TB
   A --> I["inspector.Model"]
   A --> K[keymap]
   A --> S[styles]
-  T -->|"Snapshot(ctx) / Kill(ctx, pid, signal)"| P["ports.MonitorService"]
+  T -->|"Snapshot(ctx) / Kill(ctx, ProcessRef, signal)"| P["ports.MonitorService"]
   L -.->|implementa| P
   O["procfs.Service (!linux)"] -.->|implementa| P
 ```
@@ -536,6 +541,8 @@ Todo comando de Go se ejecuta dentro de Docker Compose; nunca `go`, `gofmt`,
 | `make test-race` | Suite completa con el detector de carreras (`CGO_ENABLED=1`): solo fase final |
 | `make vet-pkg PKG='./internal/<pkg>/...'` | `go vet` de un paquete |
 | `make bench-pkg PKG='./internal/<pkg>/...'` | Benchmarks de un paquete (hoy no hay ninguno definido) |
+| `make fuzz-pkg PKG='./internal/<pkg>/...' FUZZ='FuzzName'` | Fuzzing acotado; `FUZZTIME` por defecto `10s` |
+| `make vuln` | `govulncheck` sobre el módulo, dentro del contenedor |
 | `make fmt` | `go fmt ./...` en el contenedor |
 | `make tidy` | `go mod tidy` en el contenedor |
 | `make clean` | Borra los artefactos de Air (`tmp`, `bin`) |
@@ -551,8 +558,8 @@ El release lo dispara un tag `v*`:
 
 ```bash
 # el usuario crea el tag; .github/workflows/release.yml publica
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 `.github/workflows/release.yml` instala Go 1.27.4 desde `go.mod` y ejecuta
@@ -588,7 +595,8 @@ la vía de merge, y el tag lo crea el usuario.
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — ramas, PRs, commits y comandos.
 - [`SECURITY.md`](SECURITY.md) — cómo reportar en privado, riesgo de ejecutar
-  como root y alcance de las señales.
+  como root, alcance de las señales y avisos publicados.
+- [GHSA-wpjm-93r4-37mr](https://github.com/MiguelFPP/tui-port/security/advisories/GHSA-wpjm-93r4-37mr) — aviso de la release 0.1.1.
 - [`CHANGELOG.md`](CHANGELOG.md) — historial de cambios.
 
 ## Licencia

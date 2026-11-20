@@ -7,6 +7,43 @@ proyecto usa [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-20
+
+Release de seguridad. Corrige la inyección de secuencias de control desde
+metadatos de procesos ([GHSA-wpjm-93r4-37mr](https://github.com/MiguelFPP/tui-port/security/advisories/GHSA-wpjm-93r4-37mr))
+y endurece la identidad de las señales, la configuración y los instaladores.
+
+### Security
+
+- Neutraliza controles C0/C1, formato Unicode, bidi y separadores de línea en
+  nombres de proceso, usuarios, cmdlines, filtros, rutas y errores antes de
+  renderizarlos. Un proceso podía poner `ESC` en `/proc/<pid>/status` y la
+  secuencia llegaba a la terminal.
+- `MonitorService.Kill` recibe `domain.ProcessRef` y comprueba el `starttime`
+  de `/proc/<pid>/stat` antes de la señal; un PID reciclado o sin identidad
+  verificada se rechaza con `ErrProcessChanged`. La tabla exige además que el
+  socket tenga un proceso resuelto.
+- La configuración solo se lee si es un archivo regular, con lectura acotada a
+  1 MiB y directorio `0750`; un FIFO, un dispositivo o un archivo que crece ya
+  no bloquean ni agotan memoria.
+- Los instaladores validan la versión `vX.Y.Z` y el de Windows extrae
+  exactamente `tui-port.exe` del archivo.
+- CI ejecuta `govulncheck`; las acciones están fijadas por SHA y el checkout de
+  release no persiste credenciales.
+
+### Added
+
+- `internal/tui/textsafe` y pruebas de regresión para secuencias de terminal.
+- Objetivos `make vuln` y `make fuzz-pkg`, y fuzz tests para los parsers de
+  `/proc`, la configuración y el saneador.
+- `domain.Process.StartTicks` y `domain.ProcessRef`.
+
+### Changed
+
+- `tui-port` informa `0.1.1` en builds locales y `go install`.
+- Los tests de señales usan un emisor inyectable; los de configuración cubren
+  FIFO, `/dev/zero`, symlinks y permisos.
+
 ## [0.1.0] - 2026-11-20
 
 Primera versión: monitor de puertos con tabla, detalle del socket y del proceso,
@@ -93,5 +130,6 @@ pestañas, orden, filtro y terminación de procesos con guardas.
   `.github/workflows/release.yml` la publica con GoReleaser cuando se empuja un
   tag `vX.Y.Z`.
 
-[Unreleased]: https://github.com/MiguelFPP/tui-port/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/MiguelFPP/tui-port/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/MiguelFPP/tui-port/releases/tag/v0.1.1
 [0.1.0]: https://github.com/MiguelFPP/tui-port/releases/tag/v0.1.0

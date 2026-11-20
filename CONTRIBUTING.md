@@ -70,11 +70,13 @@ mensaje claro.
 - Los tests de `internal/adapters/procfs` construyen un montaje `/proc` falso en
   `t.TempDir()`; nunca leen el `/proc` del host.
 - Los tests de `internal/config` aíslan `XDG_CONFIG_HOME` para que un archivo
-  real no se cuele.
+  real no se cuele, y cubren FIFO, `/dev/zero`, symlinks y permisos.
 - El archivo `service_linux_test.go` lleva build tag `linux` y no corre en otros
   sistemas.
 - `make test-race` necesita `gcc` y `musl-dev`, que la imagen `dev` ya trae; se
   ejecuta solo al cerrar la fase.
+- `make vuln` ejecuta `govulncheck`; `make fuzz-pkg` ejecuta un objetivo de
+  fuzzing con `PKG`, `FUZZ` y `FUZZTIME` (por defecto `10s`).
 
 ## Editar código
 
@@ -84,8 +86,11 @@ mensaje claro.
 - Agregar una dependencia solo con justificación, fijando la versión exacta en
   `go.mod`, y después ejecutar `make tidy` y `make build`.
 - El binario es estático: nada que requiera cgo.
-- Las señales a procesos pasan por `MonitorService.Kill`; no invocar `kill(1)`
-  ni construir comandos de shell.
+- Las señales a procesos pasan por `MonitorService.Kill` con un
+  `domain.ProcessRef` (PID + `starttime`); no invocar `kill(1)` ni construir
+  comandos de shell.
+- Todo texto derivado de `/proc` o de la configuración que se renderice pasa por
+  `internal/tui/textsafe`; no confiar en que un nombre de proceso sea imprimible.
 - Cualquier lectura nueva de `/proc` debe estar acotada por las constantes de
   `internal/domain/limits.go`.
 
